@@ -50,6 +50,8 @@ ifndef PLATFORM
     PLATFORM := $(HOSTPLATFORM)
 endif
 
+PLATFORM = MORPHOS
+
 ifndef SUBPLATFORM
     SUBPLATFORM :=
     ifeq ($(PLATFORM),$(filter $(PLATFORM),LINUX DINGOO GCW CAANOO))
@@ -95,7 +97,7 @@ endif
 
 ##### Makefile meta-settings
 
-PRETTY_OUTPUT := 1
+PRETTY_OUTPUT := 0
 
 NULLSTREAM := /dev/null
 
@@ -188,6 +190,23 @@ ifeq ($(PLATFORM),WII)
     CCFULLPATH = $(DEVKITPPC)/bin/$(CC)
 endif
 
+ifeq ($(PLATFORM),AROS)
+    CROSS := i386-aros-
+endif
+
+ifeq ($(PLATFORM),AMIGA)
+    CROSS := m68k-amigaos-
+endif
+
+ifeq ($(PLATFORM),AMIGAOS4)
+    CROSS := ppc-amigaos-
+endif
+
+ifeq ($(PLATFORM),MORPHOS)
+    CROSS := ppc-morphos-
+	CROSS_SUFFIX :=-10
+endif
+
 CC := $(CROSS)gcc$(CROSS_SUFFIX)
 CXX := $(CROSS)g++$(CROSS_SUFFIX)
 
@@ -204,7 +223,8 @@ L_CXX := $(CXX)
 AR := $(CROSS)ar$(CROSS_SUFFIX)
 RC := $(CROSS)windres$(CROSS_SUFFIX)
 RANLIB := $(CROSS)ranlib$(CROSS_SUFFIX)
-STRIP := $(CROSS)strip$(CROSS_SUFFIX)
+STRIP := $(CROSS)strip
+#$(CROSS_SUFFIX)
 
 AS := nasm
 
@@ -296,6 +316,8 @@ ifeq ($(PLATFORM),WINDOWS)
     endif
 else ifeq ($(PLATFORM),WII)
     IMPLICIT_ARCH := ppc
+else ifeq ($(PLATFORM),MORPHOS)
+ 	IMPLICIT_ARCH := ppc
 else
     ifneq ($(ARCH),)
         override ARCH := $(subst i486,i386,$(subst i586,i386,$(subst i686,i386,$(strip $(ARCH)))))
@@ -395,6 +417,40 @@ else ifeq ($(PLATFORM),$(filter $(PLATFORM),DINGOO GCW QNX SUNOS SYLLABLE))
     override NOASM := 1
 else ifeq ($(PLATFORM),$(filter $(PLATFORM),BEOS SKYOS))
     override NOASM := 1
+else ifeq ($(PLATFORM),AROS)
+    override USE_OPENGL := 0
+    override HAVE_GTK2 := 0
+    override HAVE_FLAC := 0
+    override HAVE_VORBIS := 0
+    override HAVE_XMP := 0
+    SDL_TARGET := 1
+    override NOASM := 1
+    override STARTUP_WINDOW := 0
+else ifeq ($(PLATFORM),AMIGA)
+    override USE_OPENGL := 0
+    override HAVE_GTK2 := 0
+    override HAVE_FLAC := 0
+    override HAVE_VORBIS := 0
+    override HAVE_XMP := 0
+    SDL_TARGET := 1
+    override STARTUP_WINDOW := 0
+else ifeq ($(PLATFORM),AMIGAOS4)
+    override USE_OPENGL := 0
+    override HAVE_GTK2 := 0
+    override HAVE_FLAC := 0
+#    override HAVE_VORBIS := 0
+    override HAVE_XMP := 0
+    SDL_TARGET := 1
+    override STARTUP_WINDOW := 0
+else ifeq ($(PLATFORM),MORPHOS)
+    override USE_OPENGL := 0
+    override HAVE_GTK2 := 0
+    override HAVE_FLAC := 1
+    override HAVE_VORBIS := 1
+    override HAVE_XMP := 1
+    SDL_TARGET := 2
+    override STARTUP_WINDOW := 0
+    override NETCODE := 1
 endif
 
 ifneq (i386,$(strip $(IMPLICIT_ARCH)))
@@ -442,7 +498,7 @@ ifeq ($(RELEASE),0)
     LTO := 0
 else
     OPTLEVEL := 2
-    LTO := 1
+    LTO := 0
 endif
 
 ifneq (0,$(CLANG))
@@ -559,6 +615,14 @@ else ifeq ($(PLATFORM),SKYOS)
 else ifeq ($(SUBPLATFORM),LINUX)
     # Locate .so files
     LINKERFLAGS += -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
+else ifeq ($(PLATFORM),AMIGA)
+    COMPILERFLAGS += -noixemul -fpermissive
+    LINKERFLAGS += -noixemul
+else ifeq ($(PLATFORM),AMIGAOS4)
+    COMPILERFLAGS += -DUINTPTR_MAX=ULONG_MAX -D__USE_INLINE__
+else ifeq ($(PLATFORM),MORPHOS)
+    COMPILERFLAGS += -noixemul -I/usr/local/include -DWORDS_BIGENDIAN=1
+    LINKERFLAGS += -noixemul
 endif
 ASFLAGS += -f $(ASFORMAT)
 
@@ -993,16 +1057,18 @@ else ifeq ($(SUBPLATFORM),LINUX)
     LIBS += -lrt -latomic
 endif
 
-ifeq (,$(filter $(PLATFORM),WINDOWS WII))
+ifeq (,$(filter $(PLATFORM),WINDOWS WII AROS AMIGA AMIGAOS4 MORPHOS))
     ifneq ($(PLATFORM),BSD)
         LIBS += -ldl
     endif
     ifneq ($(PLATFORM),DARWIN)
         LIBS += -pthread
     endif
+
 endif
 
-LIBS += -lm
+ LIBS += -L/usr/local/lib -lenet -lvorbisidec -lflac -logg -lm -lc
+ LIBS += 
 
 
 ##### Detect version control revision, if applicable
@@ -1053,7 +1119,6 @@ ifneq ($(CPLUSPLUS),0)
     COMPILER_C=$(COMPILER_CXX)
     COMPILER_OBJC=$(COMPILER_OBJCXX)
 endif
-
 
 ##### Pretty-printing
 

@@ -82,7 +82,7 @@ libxmplite_src := $(libxmplite_root)/src
 libxmplite_inc := $(libxmplite_root)/include
 libxmplite_obj := $(obj)/$(libxmplite)
 
-libxmplite_cflags := -DHAVE_ROUND -DLIBXMP_CORE_PLAYER -DBUILDING_STATIC -I$(libxmplite_inc)/libxmp-lite -Wno-unused-parameter -Wno-sign-compare
+libxmplite_cflags := -noixemul -DHAVE_ROUND -DLIBXMP_CORE_PLAYER -DBUILDING_STATIC -I$(libxmplite_inc)/libxmp-lite -Wno-unused-parameter -Wno-sign-compare
 
 
 #### PhysicsFS
@@ -1314,7 +1314,8 @@ COMPILERFLAGS += \
     -I$(voidwrap_inc) \
     -I$(libsmackerdec_inc) \
     -I$(hmpplay_inc) \
-    -MP -MMD \
+ 
+# -MP -MMD \
 
 ifneq (0,$(USE_PHYSFS))
     COMPILERFLAGS += -I$(physfs_inc) -DUSE_PHYSFS
