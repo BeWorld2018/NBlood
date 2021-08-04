@@ -327,8 +327,12 @@ int32_t findfrompath(const char *fn, char **where)
     allocsiz += 1;	// a nul
 
     char *pfn = (char *)Xmalloc(allocsiz);
-
+#ifdef __MORPHOS__
+	if (!pfn)  { Xfree(ffn); return -1; }
+	strcpy(pfn, "");
+#else
     strcpy(pfn, "./");
+#endif
     strcat(pfn, ffn);
     if (buildvfs_exists(pfn))
     {
@@ -1223,7 +1227,11 @@ BUILDVFS_FIND_REC *klistpath(const char *_path, const char *mask, int32_t type)
 
         PHYSFS_freeList(rc);
 #else
+#ifdef __MORPHOS__
+		static const char *const CUR_DIR = "";
+#else
         static const char *const CUR_DIR = "./";
+#endif
         // Adjusted for the following "autoload" dir fix - NY00123
         searchpath_t *search = NULL;
         const char *d = pathsearchmode ? _path : CUR_DIR;

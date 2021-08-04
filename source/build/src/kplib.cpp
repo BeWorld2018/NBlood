@@ -2752,14 +2752,28 @@ int32_t kzfindfile(char *filnam)
             if ((findata = readdir(hfind)) == NULL)
                 { closedir(hfind); hfind = NULL; if (!kzhashbuf) return 0; srchstat = 2; break; }
             i = wildstpathleng;
+#if defined(__AMIGA__) && !defined(__amigaos4__)
+			struct stat st;
+			if (stat(findata->d_name, &st)) continue;
+			if (S_ISDIR(st.st_mode))
+#else
             if (findata->d_type == DT_DIR)
+#endif
                 { if (findata->d_name[0] == '.' && !findata->d_name[1]) continue; } //skip .
+#if defined(__AMIGA__) && !defined(__amigaos4__)
+            else if (S_ISREG(st.st_mode) || S_ISLNK(st.st_mode))
+#else
             else if ((findata->d_type == DT_REG) || (findata->d_type == DT_LNK))
+#endif
                 { if (findata->d_name[0] == '.') continue; } //skip hidden (dot) files
             else continue; //skip devices and fifos and such
             if (!wildmatch(findata->d_name,&newildst[wildstpathleng])) continue;
             strcpy(&filnam[i],findata->d_name);
+#if defined(__AMIGA__) && !defined(__amigaos4__)
+            if (S_ISDIR(st.st_mode)) strcat(&filnam[i],"/");
+#else
             if (findata->d_type == DT_DIR) strcat(&filnam[i],"/");
+#endif
 #endif
             return 1;
         }

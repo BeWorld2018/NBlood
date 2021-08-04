@@ -24,7 +24,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "mmulti.h"
 #include "pragmas.h"
 #ifndef NETCODE_DISABLE
+#ifdef __MORPHOS__
+#include <enet/enet.h>
+#else
 #include "enet.h"
+#endif
 #endif
 #include "compat.h"
 #include "config.h"

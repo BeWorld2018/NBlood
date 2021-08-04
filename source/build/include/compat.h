@@ -333,7 +333,7 @@ defined __x86_64__ || defined __amd64__ || defined _M_X64 || defined _M_IA64 || 
 #  define B_BIG_ENDIAN    1
 # endif
 
-#elif defined(GEKKO) || defined(__ANDROID__)
+#elif defined(GEKKO) || defined(__ANDROID__)  || defined(__AMIGA__)
 # define B_LITTLE_ENDIAN 0
 # define B_BIG_ENDIAN 1
 
@@ -395,12 +395,33 @@ defined __x86_64__ || defined __amd64__ || defined _M_X64 || defined _M_IA64 || 
 #  define B_BIG_ENDIAN    1
 # endif
 
-#elif defined(_WIN32) || defined(SKYOS) || defined(__SYLLABLE__)
+#elif defined(_WIN32) || defined(SKYOS) || defined(__SYLLABLE__) || defined(__AROS__)
 # define B_LITTLE_ENDIAN 1
 # define B_BIG_ENDIAN    0
 #endif
 
-#if !defined(B_LITTLE_ENDIAN) || !defined(B_BIG_ENDIAN)
+#if defined(__AROS__) || (defined(__AMIGA__) && !defined(__amigaos4__) && !defined(__MORPHOS__))
+#define NO_ALIGNED_MALLOC
+#include <string.h>
+#define strnlen(s, maxlen) strlen((s))
+#endif
+
+#if defined(__MORPHOS__) || defined(__amigaos4__)
+# define B_LITTLE_ENDIAN 0
+#  define B_BIG_ENDIAN	1
+#include <proto/exec.h>
+#undef Remove
+#undef Wait
+#undef Insert
+#undef Debug
+#undef AllocEntry
+#undef OFFSET
+#if !defined(UINTPTR_MAX)
+#define UINTPTR_MAX UINT_MAX
+#endif
+#endif
+
+#if !defined(B_LITTLE_ENDIAN) && !defined(B_BIG_ENDIAN)
 # error Unknown endianness
 #endif
 
@@ -422,6 +443,13 @@ defined __x86_64__ || defined __amd64__ || defined _M_X64 || defined _M_IA64 || 
 
 #include <inttypes.h>
 #include <stdint.h>
+
+#ifdef __MORPHOS__
+#define INT32_MAX 2147483647
+#define INT32_MIN (-INT32_MAX-1)
+#define UINT16_MAX 65535
+#define UINT32_MAX 4294967295U
+#endif
 
 #include <limits.h>
 #include <stdarg.h>
@@ -456,7 +484,7 @@ defined __x86_64__ || defined __amd64__ || defined _M_X64 || defined _M_IA64 || 
 
 ////////// Platform headers //////////
 
-#if !defined __APPLE__ && (!defined EDUKE32_BSD || !__STDC__)
+#if !defined __APPLE__ && (!defined EDUKE32_BSD || !__STDC__)  && !defined(__AROS__)
 # include <malloc.h>
 #endif
 
@@ -577,7 +605,7 @@ typedef FILE BFILE;
 
 ////////// Standard library wrappers //////////
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(__AROS__)
 # define BS_IWRITE S_IWUSR
 # define BS_IREAD  S_IRUSR
 #else
@@ -1020,6 +1048,10 @@ static FORCE_INLINE void *Baligned_alloc(const size_t alignment, const size_t si
 #elif defined __APPLE__ || defined EDUKE32_BSD
     void *ptr = NULL;
     posix_memalign(&ptr, alignment, size);
+#elif defined __MORPHOS__
+    void *ptr = AllocVecAligned(size, MEMF_ANY, alignment, 0);
+#elif defined __amigaos4__
+    void *ptr = AllocVecTags(size, AVT_Alignment, alignment, TAG_END);
 #else
     void *ptr = memalign(alignment, size);
 #endif
@@ -1032,6 +1064,11 @@ static FORCE_INLINE void *Baligned_alloc(const size_t alignment, const size_t si
 
 #if defined _WIN32 && !defined NO_ALIGNED_MALLOC
 # define Baligned_free _aligned_free
+#elif (defined __MORPHOS__ || defined __amigaos4__) && !defined NO_ALIGNED_MALLOC
+static FORCE_INLINE void Baligned_free(void *ptr)
+{
+    FreeVec(ptr);
+}
 #else
 # define Baligned_free Bfree
 #endif

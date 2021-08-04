@@ -36,7 +36,10 @@
 
 #if defined __APPLE__
 # include <vorbis/vorbisfile.h>
-#elif defined GEKKO
+#elif defined __MORPHOS__ 
+# define USING_TREMOR
+# include <tremor/ivorbisfile.h>
+#elif defined GEKKO 
 # define USING_TREMOR
 # include <tremor/ivorbisfile.h>
 #else
@@ -224,7 +227,11 @@ static playbackstatus MV_GetNextVorbisBlock(VoiceNode *voice)
 #ifdef USING_TREMOR
         int bytes = ov_read(&vd->vf, vd->block + bytesread, BLOCKSIZE - bytesread, &bitstream);
 #else
+		#ifdef __MORPHOS__
+		int bytes = ov_read(&vd->vf, vd->block + bytesread, BLOCKSIZE - bytesread, 1, 2, 1, &bitstream);
+		#else
         int bytes = ov_read(&vd->vf, vd->block + bytesread, BLOCKSIZE - bytesread, 0, 2, 1, &bitstream);
+		#endif
 #endif
         // fprintf(stderr, "ov_read = %d\n", bytes);
         if (bytes > 0)
@@ -303,13 +310,13 @@ static playbackstatus MV_GetNextVorbisBlock(VoiceNode *voice)
     voice->sound = vd->block;
     voice->length = samples << 16;
 
-#ifdef GEKKO
+//#ifdef GEKKO
     // If libtremor had the three additional ov_read() parameters that libvorbis has,
     // this would be better handled using the endianness parameter.
     int16_t *data = (int16_t *)(vd->block);  // assumes signed 16-bit
     for (bytesread = 0; bytesread < BLOCKSIZE / 2; ++bytesread)
         data[bytesread] = (data[bytesread] & 0xff) << 8 | ((data[bytesread] & 0xff00) >> 8);
-#endif
+//#endif
 
     return KeepPlaying;
 }

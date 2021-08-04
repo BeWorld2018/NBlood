@@ -1399,6 +1399,10 @@ static void* XXH_memcpy(void* dest, const void* src, size_t size)
 /* *************************************
 *  Basic Types
 ***************************************/
+#ifdef __AMIGA__
+#define BYTE LZ4BYTE
+#endif
+
 #if !defined (__VMS) \
  && (defined (__cplusplus) \
  || (defined (__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) /* C99 */) )

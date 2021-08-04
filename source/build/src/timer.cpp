@@ -5,7 +5,13 @@
 #include "build.h"
 #include "build_cpuid.h"
 #include "compat.h"
+#ifndef NETCODE_DISABLE
+#ifdef __MORPHOS__
+#include <enet/enet.h>
+#else
 #include "enet.h"
+#endif
+#endif
 #include "renderlayer.h"
 
 #include <time.h>
@@ -109,7 +115,13 @@ int timerGetClockRate(void) { return clockTicksPerSecond; }
 template<typename T> T timerGetTicks(T freq)
 {
     timespec ts;
+
+	#if !defined(NETCODE_DISABLE) && !defined(__MORPHOS__)
     enet_gettime(CLOCK_TYPE, &ts);
+	#else
+	clock_gettime(CLOCK_TYPE, &ts);
+	#endif
+	
     return ts.tv_sec * freq + (T)((uint64_t)ts.tv_nsec * freq / (T)1000000000);
 }
 

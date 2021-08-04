@@ -82,6 +82,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # endif
 #endif /* _WIN32 */
 
+#ifdef __MORPHOS__
+unsigned long __stack = 2000000;
+static const char *version __attribute__((used)) = "$VER: " APPNAME " R3 (04.08.2021)";
+#endif
+
 const char* AppProperName = APPNAME;
 const char* AppTechnicalName = APPBASENAME;
 
@@ -1709,6 +1714,12 @@ int app_main(int argc, char const * const * argv)
     WeaponInit();
     LoadSaveSetup();
     LoadSavedInfo();
+	
+	#ifdef __MORPHOS__
+	LONG pri = -1;
+	NewSetTaskAttrsA(NULL, &pri, sizeof(pri), TASKINFOTYPE_PRI, NULL);	
+	#endif			
+	
     gDemo.LoadDemoInfo();
     initprintf("There are %d demo(s) in the loop\n", gDemo.at59ef);
     initprintf("Loading control setup\n");

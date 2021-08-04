@@ -94,6 +94,11 @@ extern "C" {
 }
 #endif
 
+#ifdef __MORPHOS__
+unsigned long __stack = 2000000;
+static const char *version __attribute__((used)) = "$VER: " APPNAME " R2 (20.07.2021)";
+#endif
+
 const char* AppProperName = APPNAME;
 const char* AppTechnicalName = APPBASENAME;
 const char* defaultpk3filename = "pcexhumed.pk3";
@@ -2300,6 +2305,11 @@ int app_main(int argc, char const* const* argv)
 
     LoadSaveSetup();
     UpdateScreenSize();
+	
+	#ifdef __MORPHOS__
+	LONG pri = -1;
+	NewSetTaskAttrsA(NULL, &pri, sizeof(pri), TASKINFOTYPE_PRI, NULL);	
+	#endif		
 
     EraseScreen(overscanindex);
     ResetEngine();

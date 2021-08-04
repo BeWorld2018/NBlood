@@ -71,6 +71,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # endif
 #endif /* _WIN32 */
 
+#ifdef __MORPHOS__
+unsigned long __stack = 2000000;
+static const char *version __attribute__((used)) = "$VER: " APPNAME " R2 (20.07.2021)";
+#endif
+
 const char* AppProperName = APPNAME;
 const char* AppTechnicalName = APPBASENAME;
 

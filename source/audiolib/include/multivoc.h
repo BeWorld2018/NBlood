@@ -33,6 +33,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include "compat.h"
 
+#ifdef __MORPHOS__
+#define INT16_MAX 32767
+#define INT16_MIN -32768
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

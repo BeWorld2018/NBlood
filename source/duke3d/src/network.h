@@ -31,7 +31,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define EDUKE32_UNUSED
 #endif
 
+#ifdef __MORPHOS__
+#include <enet/enet.h>
+#else
 #include "enet.h"
+#endif
 
 // net packet specification/compatibility version
 #define NETVERSION    1

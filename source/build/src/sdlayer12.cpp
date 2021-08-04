@@ -347,8 +347,13 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
     else
 #endif  // defined USE_OPENGL
     {
+#if defined(__amigaos4__) && SDL_MAJOR_VERSION == 1
+        // direct drawing into the SDL surface
+        sdl_surface = SDL_SetVideoMode(x, y, 8, SURFACE_FLAGS | ((fs & 1) ? SDL_FULLSCREEN : 0));
+#else
         // We convert paletted contents to non-paletted
         sdl_surface = SDL_SetVideoMode(x, y, 0, SURFACE_FLAGS | ((fs & 1) ? SDL_FULLSCREEN : 0));
+#endif
 
         if (!sdl_surface)
         {
@@ -404,11 +409,11 @@ void videoShowFrame(int32_t w)
         printf("Frame still locked %d times when showframe() called.\n", lockcount);
         while (lockcount) videoEndDrawing();
     }
-
+#if !(defined(__amigaos4__) && SDL_MAJOR_VERSION == 1)
     if (SDL_MUSTLOCK(sdl_surface)) SDL_LockSurface(sdl_surface);
     softsurface_blitBuffer((uint32_t*) sdl_surface->pixels, sdl_surface->format->BitsPerPixel);
     if (SDL_MUSTLOCK(sdl_surface)) SDL_UnlockSurface(sdl_surface);
-
+#endif
     SDL_Flip(sdl_surface);
 }
 

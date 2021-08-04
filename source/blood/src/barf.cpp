@@ -898,7 +898,11 @@ void sub_11C10(char *pzScriptDir, char *fileName, char flags, int ID)
     char zType[BMAX_PATH];
     BDIR* dirr;
     struct Bdirent* dirent;
+	#ifdef __MORPHOS__
+	dirr = Bopendir("");
+	#else
     dirr = Bopendir("./");
+	#endif
     if (dirr)
     {
         while ((dirent = Breaddir(dirr)))

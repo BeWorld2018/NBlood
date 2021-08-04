@@ -28,8 +28,11 @@ int main(void)
     FILE *fp;
     texcacheheader head;
     texcachepicture mip;
-
+#ifdef __MORPHOS__
+	dir = opendir("");
+#else
     dir = opendir(".");
+#endif
     while ((dirent = readdir(dir))) {
         if (stat(dirent->d_name, &st)) {
             printf("%s: failed to stat\n", dirent->d_name);

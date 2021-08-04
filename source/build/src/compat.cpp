@@ -54,7 +54,9 @@ void xalloc_set_location(int32_t line, const char *file, const char *func)
 void *handle_memerr(void *p)
 {
     UNREFERENCED_PARAMETER(p);
+#if !defined(__AROS__)  && !defined(__MORPHOS__)
     debug_break();
+#endif
 
     if (g_MemErrHandler)
     {
@@ -588,6 +590,8 @@ int Bgetpagesize(void)
         SYSTEM_INFO system_info;
         GetSystemInfo(&system_info);
         pageSize = system_info.dwPageSize;
+#elif __MORPHOS__
+		pageSize = AvailMem(MEMF_FAST);
 #else
         pageSize = sysconf(_SC_PAGESIZE);
 #endif
@@ -646,7 +650,10 @@ size_t Bgetsysmemsize(void)
 
     //initprintf("Bgetsysmemsize(): %d pages of %d bytes, %d bytes of system memory\n",
     //		scphyspages, scpagesiz, siz);
-
+	
+#endif
+#if defined(__AROS__) || defined(__AMIGA__)
+    siz = (uint32_t)AvailMem(MEMF_ANY/*|MEMF_LARGEST*/);
 #endif
 
     return siz;

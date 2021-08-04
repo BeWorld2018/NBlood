@@ -19,6 +19,9 @@
 #ifndef __BEOS__
 #include <arpa/inet.h>
 #endif
+#ifdef __MORPHOS__
+typedef LONG socklen_t;
+#endif
 #ifdef __sun
 #include <sys/filio.h>
 #endif
@@ -154,7 +157,7 @@ static int set_socket_blockmode(SOCKET socket, int onOrOff)
     signed int flags;
 #endif
     int rc = 0;
-
+#ifndef NETCODE_DISABLE
     /* set socket to be (non-)blocking. */
 
 #ifdef _WIN32
@@ -171,12 +174,13 @@ static int set_socket_blockmode(SOCKET socket, int onOrOff)
         rc = (fcntl(socket, F_SETFL, flags) == 0);
     }
 #endif
-
+#endif
     return(rc);
 }
 
 int netinit(int portnum)
 {
+#ifndef NETCODE_DISABLE
     LPHOSTENT lpHostEnt;
     char hostnam[256];
     struct sockaddr_in ip;
@@ -209,19 +213,27 @@ int netinit(int portnum)
     {
         myport = portnum;
         if (gethostname(hostnam,sizeof(hostnam)) != SOCKET_ERROR)
+#ifdef __MORPHOS__
+		 if ((lpHostEnt = gethostbyname((const UBYTE*)hostnam)))
+#else
             if ((lpHostEnt = gethostbyname(hostnam)))
+#endif
             {
                 myip = ip.sin_addr.s_addr = *(int *)lpHostEnt->h_addr;
                 printf("mmulti: This machine's IP is %s\n", inet_ntoa(ip.sin_addr));
             }
         return(1);
     }
+#endif
     return(0);
 }
 
 int netsend(int other, char *dabuf, int bufsiz)  //0:buffer full... can't send
 {
-    struct sockaddr_in ip;
+#ifdef NETCODE_DISABLE
+	return(0);
+#else	
+	struct sockaddr_in ip;
 
     if (!otherip[other]) return(0);
 
@@ -244,17 +256,26 @@ int netsend(int other, char *dabuf, int bufsiz)  //0:buffer full... can't send
     ip.sin_family = AF_INET;
     ip.sin_addr.s_addr = otherip[other];
     ip.sin_port = otherport[other];
+	#ifdef __MORPHOS__
+	 return(sendto(mysock,(const UBYTE*)dabuf,bufsiz,0,(struct sockaddr *)&ip,sizeof(struct sockaddr_in)) != SOCKET_ERROR);
+	#else
     return(sendto(mysock,dabuf,bufsiz,0,(struct sockaddr *)&ip,sizeof(struct sockaddr_in)) != SOCKET_ERROR);
+	#endif
+#endif
 }
 
 int netread(int *other, char *dabuf, int bufsiz)  //0:no packets in buffer
 {
+#ifndef NETCODE_DISABLE
     struct sockaddr_in ip;
     int i;
 
     i = sizeof(ip);
-
+#ifdef __MORPHOS__
+	if (recvfrom(mysock,(UBYTE*)dabuf,bufsiz,0,(struct sockaddr *)&ip,(socklen_t *)&i) == -1) return(0);
+#else
     if (recvfrom(mysock,dabuf,bufsiz,0,(struct sockaddr *)&ip,(socklen_t *)&i) == -1) return(0);
+#endif
 #if (SIMMIS > 0)
     if ((rand()&255) < SIMMIS) return(0);
 #endif
@@ -303,12 +324,13 @@ int netread(int *other, char *dabuf, int bufsiz)  //0:no packets in buffer
     i = simlagcnt[*other]%(SIMLAG+1);
     bufsiz = *(short *)&simlagfif[*other][i][0]; memcpy(dabuf,&simlagfif[*other][i][2],bufsiz);
 #endif
-
+#endif
     return(1);
 }
 
 int isvalidipaddress(const char *st)
 {
+#ifndef NETCODE_DISABLE
     int i, bcnt, num;
 
     bcnt = 0; num = 0;
@@ -332,6 +354,9 @@ int isvalidipaddress(const char *st)
 
     }
     return(bcnt == 3);
+#else
+	return (0);
+#endif
 }
 
 //---------------------------------- Obsolete variables&functions ----------------------------------
@@ -454,6 +479,7 @@ int initmultiplayersparms(int argc, const char * const *argv)
         }
 
         st = strdup(argv[i]); if (!st) break;
+#ifndef NETCODE_DISABLE
         if (isvalidipaddress(st))
         {
             if ((networkmode == MMULTI_MODE_P2P) && (daindex == myconnectindex)) daindex++;
@@ -462,7 +488,11 @@ int initmultiplayersparms(int argc, const char * const *argv)
                 if (st[j] == ':')
                     { otherport[daindex] = htons((unsigned short)atol(&st[j+1])); st[j] = 0; break; }
             }
+#ifdef __MORPHOS__
+			otherip[daindex] = inet_addr((const UBYTE*)st);
+#else
             otherip[daindex] = inet_addr(st);
+#endif
             printf("mmulti: Player %d at %s:%d\n",daindex,st,ntohs(otherport[daindex]));
             daindex++;
         }
@@ -474,7 +504,11 @@ int initmultiplayersparms(int argc, const char * const *argv)
             for (j=0;st[j];j++)
                 if (st[j] == ':')
                     { pt = htons((unsigned short)atol(&st[j+1])); st[j] = 0; break; }
+#ifdef __MORPHOS__
+			if ((lph = gethostbyname((const UBYTE*)st)))		
+#else
             if ((lph = gethostbyname(st)))
+#endif
             {
                 if ((networkmode == MMULTI_MODE_P2P) && (daindex == myconnectindex)) daindex++;
                 otherip[daindex] = *(int *)lph->h_addr;
@@ -485,6 +519,7 @@ int initmultiplayersparms(int argc, const char * const *argv)
             }
             else printf("mmulti: Failed resolving %s\n",argv[i]);
         }
+#endif
         free(st);
     }
     if ((networkmode == -1) && (daindex)) { numplayers = 2; networkmode = MMULTI_MODE_MS; } //an IP w/o /n# defaults to /n0
@@ -830,6 +865,7 @@ int mmulti_getpacket(int *retother, unsigned char *bufptr)
 
 int getexternaladdress(char *buffer, const char *host, int port)
 {
+#ifndef NETCODE_DISABLE
     int bytes_sent, i=0, j=0;
     struct sockaddr_in dest_addr;
     struct hostent *h;
@@ -853,7 +889,11 @@ int getexternaladdress(char *buffer, const char *host, int port)
     }
 #endif
 
+#ifdef __MORPHOS__
+    if ((h=gethostbyname((const UBYTE*)host)) == NULL)
+#else
     if ((h=gethostbyname(host)) == NULL)
+#endif
     {
         initprintf("mmulti: gethostbyname() error in getexternaladdress() (%d)\n",h_errno);
         return(0);
@@ -879,7 +919,11 @@ int getexternaladdress(char *buffer, const char *host, int port)
         return(0);
     }
 
+#ifdef __MORPHOS__
+	bytes_sent = send(mysock, (const UBYTE*)req, strlen(req), 0);
+#else
     bytes_sent = send(mysock, req, strlen(req), 0);
+#endif
     if (bytes_sent == SOCKET_ERROR)
     {
         initprintf("mmulti: send() error in getexternaladdress() (%d)\n",errno);
@@ -887,7 +931,11 @@ int getexternaladdress(char *buffer, const char *host, int port)
     }
 
     //    initprintf("sent %d bytes\n",bytes_sent);
+#ifdef __MORPHOS__
+	recv(mysock, (UBYTE *)&tempbuf, sizeof(tempbuf), 0);
+#else
     recv(mysock, (char *)&tempbuf, sizeof(tempbuf), 0);
+#endif
     closesocket(mysock);
     j = Bstrlen(text);
     for (i=Bstrlen(tempbuf);i>0;i--)
@@ -905,4 +953,7 @@ int getexternaladdress(char *buffer, const char *host, int port)
         }
     Bmemcpy(buffer,&ipaddr,j);
     return(1);
+#else
+	return (0);
+#endif
 }

@@ -107,12 +107,16 @@ static float lastvidgcb[3];
 
 #include "sdlkeytrans.cpp"
 
+#ifndef __MORPHOS__
 static SDL_Surface *appicon = NULL;
 #if !defined __APPLE__ && !defined EDUKE32_TOUCH_DEVICES
 static SDL_Surface *loadappicon(void);
 #endif
+#endif
 
+#ifndef __MORPHOS__
 static mutex_t m_initprintf;
+#endif
 
 // Joystick dead and saturation zones
 uint16_t joydead[9], joysatur[9];
@@ -268,16 +272,18 @@ void wm_setapptitle(const char *name)
     if (name != apptitle)
         Bstrncpyz(apptitle, name, sizeof(apptitle));
 
+#if !defined(__MORPHOS__)
 #if !defined(__APPLE__)
     if (!appicon)
         appicon = loadappicon();
+#endif
 #endif
 
 #if SDL_MAJOR_VERSION >= 2
     if (sdl_window)
     {
         SDL_SetWindowTitle(sdl_window, apptitle);
-
+#if !defined(__MORPHOS__)
         if (appicon)
         {
 #if defined _WIN32
@@ -285,6 +291,7 @@ void wm_setapptitle(const char *name)
 #endif
             SDL_SetWindowIcon(sdl_window, appicon);
         }
+#endif
     }
 #else
     SDL_WM_SetCaption(apptitle, NULL);
@@ -310,7 +317,7 @@ void wm_setapptitle(const char *name)
 //
 
 /* XXX: libexecinfo could be used on systems without gnu libc. */
-#if !defined _WIN32 && defined __GNUC__ && !defined __OpenBSD__ && !(defined __APPLE__ && defined __BIG_ENDIAN__) && !defined GEKKO && !defined EDUKE32_TOUCH_DEVICES && !defined __OPENDINGUX__
+#if !defined _WIN32 && defined __GNUC__ && !defined __OpenBSD__ && !(defined __APPLE__ && defined __BIG_ENDIAN__) && !defined GEKKO && !defined EDUKE32_TOUCH_DEVICES && !defined __OPENDINGUX__ && !defined(__AROS__) && !defined(__AMIGA__)
 # define PRINTSTACKONSEGV 1
 # include <execinfo.h>
 #endif
@@ -320,9 +327,11 @@ static inline char grabmouse_low(char a);
 #ifndef __ANDROID__
 static void attach_debugger_here(void)
 {
-#ifdef DEBUGGINGAIDS
-    debug_break();
-#endif
+	#if !defined(__MORPHOS__)
+		#ifdef DEBUGGINGAIDS
+			debug_break();
+		#endif
+	#endif
 }
 
 static void sighandler(int signum)
@@ -660,8 +669,9 @@ int32_t sdlayer_checkversion(void)
 //
 int32_t initsystem(void)
 {
+#ifndef __MORPHOS__
     mutex_init(&m_initprintf);
-
+#endif
 #ifdef _WIN32
     windowsPlatformInit();
 #endif
@@ -733,12 +743,22 @@ void uninitsystem(void)
     uninitinput();
     timerUninit();
 
+#ifndef __MORPHOS__
     if (appicon)
     {
         SDL_FreeSurface(appicon);
         appicon = NULL;
     }
-
+#endif
+	if (sdl_surface) {
+		SDL_FreeSurface(sdl_surface);
+		sdl_surface = NULL;	
+	}
+	if (sdl_window) {
+		SDL_DestroyWindow(sdl_window);	
+		sdl_window=NULL;		
+	}
+	
 #ifdef _WIN32
     windowsPlatformCleanup();
 #endif
@@ -800,7 +820,9 @@ void initputs(const char *buf)
     OSD_Puts(buf);
 //    Bprintf("%s", buf);
 
+#ifndef __MORPHOS__
     mutex_lock(&m_initprintf);
+#endif
     if (Bstrlen(dabuf) + Bstrlen(buf) > 1022)
     {
         startwin_puts(dabuf);
@@ -820,7 +842,9 @@ void initputs(const char *buf)
 #endif
         Bmemset(dabuf, 0, sizeof(dabuf));
     }
+#ifndef __MORPHOS__
     mutex_unlock(&m_initprintf);
+#endif
 }
 
 //
@@ -858,6 +882,7 @@ static SDL_Joystick *joydev = NULL;
 static SDL_GameController *controller = NULL;
 static SDL_Haptic *haptic = NULL;
 
+#ifndef __MORPHOS__
 static void LoadSDLControllerDB()
 {
     buildvfs_kfd fh = kopen4load("gamecontrollerdb.txt", 0);
@@ -905,7 +930,7 @@ static void LoadSDLControllerDB()
     Xaligned_free(dbuf);
 }
 #endif
-
+#endif
 static int numjoysticks;
 
 void joyScanDevices()
@@ -1118,8 +1143,11 @@ int32_t initinput(void(*hotplugCallback)(void) /*= nullptr*/)
 #endif
     {
 #if SDL_MAJOR_VERSION >= 2
+#ifndef __MORPHOS__
         LoadSDLControllerDB();
 #endif
+#endif
+
         joyScanDevices();
     }
 
@@ -1587,7 +1615,9 @@ int32_t setvideomode_sdlcommon(int32_t *x, int32_t *y, int32_t c, int32_t fs, in
     else
 #endif
     {
+#if !(defined(__amigaos4__) && SDL_MAJOR_VERSION == 1)
        softsurface_destroy();
+#endif
     }
 
     // clear last gamma/contrast/brightness so that it will be set anew
@@ -1863,7 +1893,12 @@ void videoBeginDrawing(void)
     else
 #endif
     {
+#if defined(__amigaos4__) && SDL_MAJOR_VERSION == 1
+    if (SDL_MUSTLOCK(sdl_surface)) SDL_LockSurface(sdl_surface);
+    frameplace = (intptr_t)sdl_surface->pixels;
+#else
         frameplace = (intptr_t)softsurface_getBuffer();
+#endif
     }
 
     if (modechange)
@@ -1891,6 +1926,9 @@ void videoEndDrawing(void)
     if (!offscreenrendering) frameplace = 0;
     if (lockcount == 0) return;
     lockcount = 0;
+#if defined(__amigaos4__) && SDL_MAJOR_VERSION == 1
+    if (SDL_MUSTLOCK(sdl_surface)) SDL_UnlockSurface(sdl_surface);
+#endif
 }
 
 //
@@ -2022,10 +2060,14 @@ int32_t videoUpdatePalette(int32_t start, int32_t num)
 #endif
     {
         if (sdl_surface)
+#if defined(__amigaos4__) && SDL_MAJOR_VERSION == 1
+            SDL_SetColors(sdl_surface, (SDL_Color *)curpalettefaded, 0, 256);
+#else
             softsurface_setPalette(curpalettefaded,
                                    sdl_surface->format->Rmask,
                                    sdl_surface->format->Gmask,
                                    sdl_surface->format->Bmask);
+#endif
     }
 
     return 0;
@@ -2101,6 +2143,7 @@ int32_t videoSetGamma(void)
     return i;
 }
 
+#ifndef __MORPHOS__
 #if !defined __APPLE__ && !defined EDUKE32_TOUCH_DEVICES
 extern "C" struct sdlappicon sdlappicon;
 static inline SDL_Surface *loadappicon(void)
@@ -2109,6 +2152,7 @@ static inline SDL_Surface *loadappicon(void)
                                                  sdlappicon.width * 4, 0xffl, 0xff00l, 0xff0000l, 0xff000000l);
     return surf;
 }
+#endif
 #endif
 
 //
@@ -2244,9 +2288,11 @@ int32_t handleevents_sdlcommon(SDL_Event *ev)
 #endif
         case SDL_JOYAXISMOTION:
 #if SDL_MAJOR_VERSION >= 2
+#ifndef __MORPHOS__
             if (joystick.isGameController)
                 break;
             fallthrough__;
+#endif
         case SDL_CONTROLLERAXISMOTION:
 #endif
             if (appactive && ev->jaxis.axis < joystick.numAxes)
@@ -2293,9 +2339,11 @@ int32_t handleevents_sdlcommon(SDL_Event *ev)
         case SDL_JOYBUTTONDOWN:
         case SDL_JOYBUTTONUP:
 #if SDL_MAJOR_VERSION >= 2
+#ifndef __MORHPOS__
             if (joystick.isGameController)
                 break;
             fallthrough__;
+#endif
         case SDL_CONTROLLERBUTTONDOWN:
         case SDL_CONTROLLERBUTTONUP:
 #endif
