@@ -8724,7 +8724,7 @@ MAIN_LOOP_RESTART:
 
         static bool frameJustDrawn;
         char gameUpdate = false;
-        double const gameUpdateStartTime = timerGetHiTicks();
+        double const gameUpdateStartTime = timerGetFractionalTicks();
         if (((g_netClient || g_netServer) || !(g_player[myconnectindex].ps->gm & (MODE_MENU|MODE_DEMO))) && totalclock >= ototalclock+TICSPERFRAME)
         {
             do
@@ -8779,7 +8779,7 @@ MAIN_LOOP_RESTART:
                 while (((g_netClient || g_netServer) || !(g_player[myconnectindex].ps->gm & (MODE_MENU|MODE_DEMO))) && totalclock >= ototalclock+TICSPERFRAME);
 
                 gameUpdate = true;
-                g_gameUpdateTime = timerGetHiTicks()-gameUpdateStartTime;
+                g_gameUpdateTime = timerGetFractionalTicks()-gameUpdateStartTime;
                 if (g_gameUpdateAvgTime < 0.f)
                     g_gameUpdateAvgTime = g_gameUpdateTime;
                 g_gameUpdateAvgTime = ((GAMEUPDATEAVGTIMENUMSAMPLES-1.f)*g_gameUpdateAvgTime+g_gameUpdateTime)/((float) GAMEUPDATEAVGTIMENUMSAMPLES);
@@ -8813,7 +8813,7 @@ MAIN_LOOP_RESTART:
 
             if (gameUpdate)
             {
-                g_gameUpdateAndDrawTime = timerGetHiTicks()-gameUpdateStartTime;
+                g_gameUpdateAndDrawTime = timerGetFractionalTicks()-gameUpdateStartTime;
             }
 
             frameJustDrawn = true;
@@ -9293,6 +9293,7 @@ static void G_SetupGameButtons(void)
     CONTROL_DefineFlag(gamefunc_Last_Weapon,FALSE);
     CONTROL_DefineFlag(gamefunc_Quick_Save, FALSE);
     CONTROL_DefineFlag(gamefunc_Quick_Load, FALSE);
+    CONTROL_DefineFlag(gamefunc_Alt_Fire,FALSE);
     CONTROL_DefineFlag(gamefunc_Third_Person_View, FALSE);
     CONTROL_DefineFlag(gamefunc_Toggle_Crouch, FALSE);
 }

@@ -509,6 +509,7 @@ void PreloadCache(void)
 void EndLevel(void)
 {
     gViewPos = VIEWPOS_0;
+    gViewIndex = myconnectindex;
     gGameMessageMgr.Clear();
     sndKillAllSounds();
     sfxKillAllSounds();
@@ -627,6 +628,8 @@ void StartLevel(GAMEOPTIONS *gameOptions)
 
         gBlueFlagDropped = false;
         gRedFlagDropped = false;
+        gView = gMe;
+        gViewIndex = myconnectindex;
     }
     if (gameOptions->uGameFlags&1)
     {
@@ -794,6 +797,8 @@ void StartNetworkLevel(void)
 
         gBlueFlagDropped = false;
         gRedFlagDropped = false;
+        gView = gMe;
+        gViewIndex = myconnectindex;
 
         if (gPacketStartGame.userMap)
             levelAddUserMap(gPacketStartGame.userMapName);
@@ -921,7 +926,7 @@ void LocalKeys(void)
             break;
         case sc_Escape:
             keyFlushScans();
-            if (gGameStarted && gPlayer[myconnectindex].pXSprite->health != 0)
+            if (gGameStarted && (gPlayer[myconnectindex].pXSprite->health != 0 || gGameOptions.nGameType > 0))
             {
                 if (!gGameMenuMgr.m_bActive)
                     gGameMenuMgr.Push(&menuMainWithSave,-1);
@@ -959,7 +964,8 @@ void LocalKeys(void)
             return;
         case sc_F6:
             keyFlushScans();
-            DoQuickSave();
+            if (gGameOptions.nGameType == 0)
+                DoQuickSave();
             break;
         case sc_F8:
             keyFlushScans();
@@ -968,7 +974,8 @@ void LocalKeys(void)
             return;
         case sc_F9:
             keyFlushScans();
-            DoQuickLoad();
+            if (gGameOptions.nGameType == 0)
+                DoQuickLoad();
             break;
         case sc_F10:
             keyFlushScans();
@@ -1637,17 +1644,36 @@ int app_main(int argc, char const * const * argv)
     OSD_SetParameters(0, 0, 0, 12, 2, 12, OSD_ERROR, OSDTEXT_RED, gamefunctions[gamefunc_Show_Console][0] == '\0' ? OSD_PROTECTED : 0);
     registerosdcommands();
 
-    char *const setupFileName = Xstrdup(SetupFilename);
-    char *const p = strtok(setupFileName, ".");
+    auto const hasSetupFilename = strcmp(SetupFilename, SETUPFILENAME);
 
-    if (!p || !Bstrcmp(SetupFilename, SETUPFILENAME))
-        Bsprintf(buffer, "settings.cfg");
+    if (!hasSetupFilename)
+        Bsnprintf(buffer, ARRAY_SIZE(buffer), APPBASENAME "_cvars.cfg");
     else
-        Bsprintf(buffer, "%s_settings.cfg", p);
+    {
+        char const * const ext = strchr(SetupFilename, '.');
+        if (ext != nullptr)
+            Bsnprintf(buffer, ARRAY_SIZE(buffer), "%.*s_cvars.cfg", int(ext - SetupFilename), SetupFilename);
+        else
+            Bsnprintf(buffer, ARRAY_SIZE(buffer), "%s_cvars.cfg", SetupFilename);
+    }
 
-    Bfree(setupFileName);
+    if (OSD_Exec(buffer))
+    {
+        // temporary fallback to unadorned "settings.cfg"
 
-    OSD_Exec(buffer);
+        if (!hasSetupFilename)
+            Bsnprintf(buffer, ARRAY_SIZE(buffer), "settings.cfg");
+        else
+        {
+            char const * const ext = strchr(SetupFilename, '.');
+            if (ext != nullptr)
+                Bsnprintf(buffer, ARRAY_SIZE(buffer), "%.*s_settings.cfg", int(ext - SetupFilename), SetupFilename);
+            else
+                Bsnprintf(buffer, ARRAY_SIZE(buffer), "%s_settings.cfg", SetupFilename);
+        }
+
+        OSD_Exec(buffer);
+    }
 
     // Not neccessary ?
     // CONFIG_SetDefaultKeys(keydefaults, true);
@@ -1785,7 +1811,7 @@ RESTART:
         if (gGameStarted)
         {
             char gameUpdate = false;
-            double const gameUpdateStartTime = timerGetHiTicks();
+            double const gameUpdateStartTime = timerGetFractionalTicks();
             while (gPredictTail < gNetFifoHead[myconnectindex] && !gPaused)
             {
                 viewUpdatePrediction(&gFifoInput[gPredictTail&255][myconnectindex]);
@@ -1822,7 +1848,7 @@ RESTART:
             }
             if (gameUpdate)
             {
-                g_gameUpdateTime = timerGetHiTicks() - gameUpdateStartTime;
+                g_gameUpdateTime = timerGetFractionalTicks() - gameUpdateStartTime;
                 if (g_gameUpdateAvgTime < 0.f)
                     g_gameUpdateAvgTime = g_gameUpdateTime;
                 g_gameUpdateAvgTime = ((GAMEUPDATEAVGTIMENUMSAMPLES-1.f)*g_gameUpdateAvgTime+g_gameUpdateTime)/((float) GAMEUPDATEAVGTIMENUMSAMPLES);
@@ -1836,7 +1862,7 @@ RESTART:
                 if (bDraw)
                 {
                     viewDrawScreen();
-                    g_gameUpdateAndDrawTime = timerGetHiTicks() - gameUpdateStartTime;
+                    g_gameUpdateAndDrawTime = timerGetFractionalTicks() - gameUpdateStartTime;
                 }
             }
         }
