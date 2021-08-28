@@ -113,7 +113,7 @@ void AdLibDrv_MIDI_Service(void)
 
     for (int i = 0; i < MV_MIXBUFFERSIZE; i++)
     {
-        Bit16s buf[2];
+        int16_t buf[2];
         while (MV_MIDIRenderTimer >= MV_MixRate)
         {
             if (MV_MIDIRenderTempo >= 0)
@@ -124,11 +124,11 @@ void AdLibDrv_MIDI_Service(void)
         OPL3_GenerateResampled(AL_GetChip(), buf);
         if (MV_Channels == 2)
         {
-            *buffer16++ = clamp((buf[0]<<AL_PostAmp)*AL_Volume/MIDI_MaxVolume, INT16_MIN, INT16_MAX);
-            *buffer16++ = clamp((buf[1]<<AL_PostAmp)*AL_Volume/MIDI_MaxVolume, INT16_MIN, INT16_MAX);
+            *buffer16++ = clamp(lrintf(buf[0] * AL_PostAmp * AL_Volume * (1.f / MIDI_MaxVolume)), INT16_MIN, INT16_MAX);
+            *buffer16++ = clamp(lrintf(buf[1] * AL_PostAmp * AL_Volume * (1.f / MIDI_MaxVolume)), INT16_MIN, INT16_MAX);
         }
         else
-            *buffer16++ = clamp(((buf[0]<<AL_PostAmp)+(buf[1]<<AL_PostAmp))*AL_Volume/(2*MIDI_MaxVolume), INT16_MIN, INT16_MAX);
+            *buffer16++ = clamp(lrintf((buf[0] + buf[1]) * AL_PostAmp * AL_Volume * (.5f / MIDI_MaxVolume)), INT16_MIN, INT16_MAX);
     }
 }
 
@@ -225,7 +225,7 @@ static int constexpr AL_MaxMidiChannel = ARRAY_SIZE(Channel);
 int AL_Stereo = TRUE;
 int AL_AdditiveMode;
 
-int AL_PostAmp = 3;
+float AL_PostAmp = 3.f;
 
 // TODO: clean up this shit...
 #define OFFSET(structure, offset) (*((char **)&(structure)[offset]))
@@ -270,7 +270,7 @@ static void LL_AddNode(char * __restrict item, char ** __restrict head, char ** 
 
 static void AL_SendOutputToPort(int const port, int const reg, int const data)
 {
-    OPL3_WriteRegBuffered(&chip, (Bit16u)(reg + ((port & 2) << 7)), (Bit8u)data);
+    OPL3_WriteRegBuffered(&chip, (uint16_t)(reg + ((port & 2) << 7)), (uint8_t)data);
 }
 
 

@@ -96,9 +96,6 @@ static int32_t pathsearchmode_oninit;
 sound_t g_sounds[MAXSOUNDS];
 #pragma pack(pop)
 
-static int16_t g_definedsndnum[MAXSOUNDS];  // maps parse order index to g_sounds index
-static int16_t g_sndnum[MAXSOUNDS];  // maps current order index to g_sounds index
-int32_t g_numsounds = 0;
 static int32_t bstatus;
 
 static int32_t corruptchecktimer;
@@ -4579,7 +4576,7 @@ static void Keys3d(void)
     if ((keystatus[KEYSC_QUOTE] || keystatus[KEYSC_SEMI]) && PRESSED_KEYSC(P))   // ' P  ; P
     {
         int16_t w, start_wall, end_wall, currsector;
-        int8_t pal[4];
+        int16_t pal[4];
 
         if (highlightsectorcnt == -1)
         {
@@ -4726,6 +4723,7 @@ static void Keys3d(void)
                 !eitherALT ? ", aligning xrepeats" : "",
                 keystatus[KEYSC_QUOTE] ? ", aligning TROR-nextwalls" : "",
                 (wall[searchbottomwall].cstat&4) ? "" : ". WARNING: top-aligned");
+        asksave = 1;
     }
 
     tsign = 0;
@@ -4739,6 +4737,7 @@ static void Keys3d(void)
             sprite[searchwall].ang += tsign<<(!eitherSHIFT*7);
             sprite[searchwall].ang &= 2047;
             message("Sprite %d angle: %d", searchwall, TrackerCast(sprite[searchwall].ang));
+            asksave = 1;
         }
     }
 
@@ -5044,8 +5043,12 @@ static void Keys3d(void)
                         }
                     }
 
-                    silentmessage("Sector %d visibility %d", searchsector,
-                                  TrackerCast(sector[searchsector].visibility));
+                    if (sector[searchsector].visibility >= 240)
+                        silentmessage("Sector %d visibility %d (%d)", searchsector, TrackerCast(sector[searchsector].visibility) - 256,
+                                      TrackerCast(sector[searchsector].visibility));
+                    else
+                        silentmessage("Sector %d visibility %d", searchsector, TrackerCast(sector[searchsector].visibility));
+
                     asksave = 1;
                 }
             }
@@ -9234,6 +9237,16 @@ enum
 
     T_GAMESTARTUP,
 
+    T_SOUND,
+    T_FILE,
+    T_ID,
+    T_MINPITCH,
+    T_MAXPITCH,
+    T_PRIORITY,
+    T_TYPE,
+    T_DISTANCE,
+    T_VOLUME,
+
     T_DUMMY,
 };
 
@@ -9269,9 +9282,12 @@ static int32_t parsegroupfiles(scriptfile *script)
         { "#include",        T_INCLUDE },
         { "includedefault",  T_INCLUDEDEFAULT },
         { "#includedefault", T_INCLUDEDEFAULT },
+        { "define",          T_DEFINE },
+        { "#define",         T_DEFINE },
         { "loadgrp",         T_LOADGRP },
         { "cachesize",       T_CACHESIZE },
         { "noautoload",      T_NOAUTOLOAD },
+        { "sound",           T_SOUND },
         { "globalgameflags", T_GLOBALGAMEFLAGS },
     };
 
@@ -9329,9 +9345,85 @@ static int32_t parsegroupfiles(scriptfile *script)
             break;
         }
         break;
+        case T_DEFINE:
+        {
+            char *name;
+            int32_t number;
+
+            if (scriptfile_getstring(script, &name)) break;
+            if (scriptfile_getsymbol(script, &number)) break;
+
+            if (EDUKE32_PREDICT_FALSE(scriptfile_addsymbolvalue(name, number) < 0))
+                initprintf("Warning: Symbol %s was NOT redefined to %d on line %s:%d\n",
+                           name, number, script->filename, scriptfile_getlinum(script, cmdtokptr));
+            break;
+        }
         case T_NOAUTOLOAD:
             NoAutoLoad = 1;
             break;
+        case T_SOUND:
+        {
+            char *tokenPtr = script->ltextptr;
+            char *fileName = NULL;
+            char *soundEnd;
+
+            double volume = 1.0;
+
+            int32_t soundNum = -1;
+            int32_t maxpitch = 0;
+            int32_t minpitch = 0;
+            int32_t priority = 0;
+            int32_t type     = 0;
+            int32_t distance = 0;
+
+            if (scriptfile_getbraces(script, &soundEnd))
+                break;
+
+            char * definedName = nullptr;
+
+            static const tokenlist soundTokens[] =
+            {
+                { "id",       T_ID },
+                { "file",     T_FILE },
+                { "minpitch", T_MINPITCH },
+                { "maxpitch", T_MAXPITCH },
+                { "priority", T_PRIORITY },
+                { "type",     T_TYPE },
+                { "distance", T_DISTANCE },
+                { "volume",   T_VOLUME },
+            };
+
+            while (script->textptr < soundEnd)
+            {
+                switch (getatoken(script, soundTokens, ARRAY_SIZE(soundTokens)))
+                {
+                    case T_ID:
+                        definedName = script->ltextptr;
+                        scriptfile_getsymbol(script, &soundNum);
+                        break;
+                    case T_FILE:     scriptfile_getstring(script, &fileName); break;
+                    case T_MINPITCH: scriptfile_getsymbol(script, &minpitch); break;
+                    case T_MAXPITCH: scriptfile_getsymbol(script, &maxpitch); break;
+                    case T_PRIORITY: scriptfile_getsymbol(script, &priority); break;
+                    case T_TYPE:     scriptfile_getsymbol(script, &type);     break;
+                    case T_DISTANCE: scriptfile_getsymbol(script, &distance); break;
+                    case T_VOLUME:   scriptfile_getdouble(script, &volume);   break;
+                }
+            }
+
+            if (soundNum==-1)
+            {
+                initprintf("Error: missing ID for sound definition near line %s:%d\n", script->filename, scriptfile_getlinum(script, tokenPtr));
+                break;
+            }
+
+            if (fileName == NULL || check_file_exist(fileName))
+                break;
+
+            if (S_DefineSound(soundNum, fileName, definedName, minpitch, maxpitch, priority, type, distance, volume) == -1)
+                initprintf("Error: invalid sound ID on line %s:%d\n", script->filename, scriptfile_getlinum(script, tokenPtr));
+        }
+        break;
         case T_GLOBALGAMEFLAGS:
         {
             if (scriptfile_getnumber(script,&duke3d_m32_globalflags)) break;
@@ -9804,26 +9896,25 @@ static int32_t parseconsounds(scriptfile *script)
         }
         case T_DEFINESOUND:
         {
-            char *definedname, *filename;
+            char * filename;
             int32_t sndnum, ps, pe, pr, m, vo;
-            int32_t slen, duplicate=0;
+            int32_t slen;
 
             if (scriptfile_getsymbol(script, &sndnum)) break;
 
-            definedname = Xstrdup(script->ltextptr);
+            char * definedname = script->ltextptr;
+            float volume = 1.0;
 
             if (sndnum < 0 || sndnum >= MAXSOUNDS)
             {
                 initprintf("Warning: invalid sound definition %s (sound number < 0 or >= MAXSOUNDS) on line %s:%d\n",
                            definedname, script->filename,scriptfile_getlinum(script,cmdtokptr));
-                Xfree(definedname);
                 num_invalidsounds++;
                 break;
             }
 
             if (scriptfile_getstring(script, &filename))
             {
-                Xfree(definedname);
                 num_invalidsounds++;
                 break;
             }
@@ -9833,20 +9924,9 @@ static int32_t parseconsounds(scriptfile *script)
             {
                 initprintf("Warning: invalid sound definition %s (filename too long) on line %s:%d\n",
                            definedname, script->filename,scriptfile_getlinum(script,cmdtokptr));
-                Xfree(definedname);
                 num_invalidsounds++;
                 break;
             }
-
-            if (g_sounds[sndnum].filename)
-            {
-                duplicate = 1;
-                Xfree(g_sounds[sndnum].filename);
-            }
-            g_sounds[sndnum].filename = (char *)Xcalloc(slen+1,sizeof(uint8_t));
-            // Hopefully noone does memcpy(..., g_sounds[].filename, BMAX_PATH)
-
-            Bmemcpy(g_sounds[sndnum].filename, filename, slen+1);
 
             if (scriptfile_getnumber(script, &ps)) goto BAD;
             if (scriptfile_getnumber(script, &pe)) goto BAD;
@@ -9857,33 +9937,13 @@ static int32_t parseconsounds(scriptfile *script)
             if (0)
             {
 BAD:
-                Xfree(definedname);
-                DO_FREE_AND_NULL(g_sounds[sndnum].filename);
                 num_invalidsounds++;
                 break;
             }
 
-            if (g_sounds[sndnum].definedname)
-            {
-                duplicate = 1;
-                Xfree(g_sounds[sndnum].definedname);
-            }
-            if (duplicate)
-                initprintf("warning: duplicate sound #%d, overwriting\n", sndnum);
+            if (S_DefineSound(sndnum, filename, definedname, ps, pe, pr, m, vo, volume) == -1)
+                initprintf("Error: invalid sound ID on line %s:%d\n", script->filename, scriptfile_getlinum(script, cmdtokptr));
 
-            g_sounds[sndnum].definedname = definedname;  // we want to keep it for display purposes
-            g_sounds[sndnum].ps = ps;
-            g_sounds[sndnum].pe = pe;
-            g_sounds[sndnum].pr = pr;
-            g_sounds[sndnum].m = m;
-            g_sounds[sndnum].vo = vo;
-            if (!duplicate)
-            {
-                g_sndnum[g_numsounds] = g_definedsndnum[g_numsounds] = sndnum;
-                g_numsounds++;
-                if (g_numsounds == MAXSOUNDS)
-                    goto END;
-            }
             break;
         }
         case T_EOF:
@@ -10265,14 +10325,18 @@ void ExtPreCheckKeys(void) // just before drawrooms
     {
         for (i=ii=0; i<MAXSPRITES && ii < Numsprites; i++)
         {
-            int32_t daang = 0, flags, shade;
-            int32_t picnum, frames;
+            auto pSprite = (uspriteptr_t)&sprite[i];
+
+            if ((pSprite->cstat & 48) != 0 || pSprite->statnum == MAXSTATUS || (unsigned)pSprite->sectnum >= MAXSECTORS) continue;
+            if (bitmap_test(graysectbitmap, pSprite->sectnum)) continue;
+
+            int daang = 0, flags = 0, shade = 0, frames = 0;
+            int picnum = pSprite->picnum;
             int32_t xp1, yp1;
 
             if ((sprite[i].cstat & 48) != 0 || sprite[i].statnum == MAXSTATUS) continue;
+
             ii++;
-            picnum = sprite[i].picnum;
-            daang = flags = frames = shade = 0;
 
             switch (picnum)
             {

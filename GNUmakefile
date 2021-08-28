@@ -82,7 +82,7 @@ libxmplite_src := $(libxmplite_root)/src
 libxmplite_inc := $(libxmplite_root)/include
 libxmplite_obj := $(obj)/$(libxmplite)
 
-libxmplite_cflags := -noixemul -DHAVE_ROUND -DLIBXMP_CORE_PLAYER -DBUILDING_STATIC -I$(libxmplite_inc)/libxmp-lite -Wno-unused-parameter -Wno-sign-compare
+libxmplite_cflags := -noixemul -DHAVE_ROUND -DLIBXMP_CORE_PLAYER -DLIBXMP_NO_PROWIZARD -DLIBXMP_NO_DEPACKERS -DBUILDING_STATIC -I$(libxmplite_inc)/libxmp-lite -Wno-unused-parameter -Wno-sign-compare
 
 
 #### PhysicsFS
@@ -409,7 +409,7 @@ audiolib_cflags :=
 audiolib_deps :=
 
 ifeq ($(PLATFORM),WINDOWS)
-    audiolib_objs += driver_directsound.cpp driver_winmm.cpp 
+    audiolib_objs += driver_directsound.cpp driver_winmm.cpp
 endif
 ifeq ($(SUBPLATFORM),LINUX)
     audiolib_objs += driver_alsa.cpp
@@ -1314,7 +1314,7 @@ COMPILERFLAGS += \
     -I$(voidwrap_inc) \
     -I$(libsmackerdec_inc) \
     -I$(hmpplay_inc) \
- 
+
 # -MP -MMD \
 
 ifneq (0,$(USE_PHYSFS))

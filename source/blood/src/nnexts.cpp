@@ -499,7 +499,7 @@ void nnExtInitModernStuff(bool bSaveLoad) {
     nnExtResetGlobals();
 
     // use true random only for single player mode, otherwise use Blood's default one.
-    if (gGameOptions.nGameType == 0 && !VanillaMode() && !DemoRecordStatus()) {
+    if (gGameOptions.nGameType == 0 && !VanillaMode()) {
         
         gStdRandom.seed(std::random_device()());
 
@@ -3247,7 +3247,7 @@ void condError(XSPRITE* pXCond, const char* pzFormat, ...) {
     char buffer[256]; char buffer2[512]; char condType[32] = "Unknown";
     for (int i = 0; i < 7; i++) {
         if (pXCond->data1 < gCondTypeNames[i].rng1 || pXCond->data1 >= gCondTypeNames[i].rng2) continue;
-        Bsprintf(condType, gCondTypeNames[i].name);
+        Bstrcpy(condType, gCondTypeNames[i].name);
         Bstrupr(condType);
         break;
     }

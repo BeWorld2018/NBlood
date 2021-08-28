@@ -804,7 +804,7 @@ void bail2dos(const char *fmt, ...)
     setvmode(3);
 #endif
 
-    initprintf("bailed to dos\n");
+    initputs("bailed to dos\n");
 
     va_list args;
     va_start(args, fmt);
@@ -813,7 +813,7 @@ void bail2dos(const char *fmt, ...)
 
     va_end(args);
 
-    initprintf(buf);
+    initputs(buf);
 
     if (*buf != 0)
     {
@@ -1033,6 +1033,17 @@ static const char *safeStrtok(char *s, const char *d)
 
 void CheckKeys()
 {
+    if (BUTTON(gamefunc_Next_Weapon))
+    {
+        CONTROL_ClearButton(gamefunc_Next_Weapon);
+        SelectNextWeapon();
+    }
+    else if (BUTTON(gamefunc_Previous_Weapon))
+    {
+        CONTROL_ClearButton(gamefunc_Previous_Weapon);
+        SelectPreviousWeapon();
+    }
+
     if (BUTTON(gamefunc_Enlarge_Screen))
     {
         if (nMapMode == 0)
@@ -1637,7 +1648,7 @@ static void G_PrintFPS(void)
     static float lastFPS; // , minFPS = std::numeric_limits<float>::max(), maxFPS;
     //static double minGameUpdate = std::numeric_limits<double>::max(), maxGameUpdate;
 
-    double frameTime = timerGetHiTicks();
+    double frameTime = timerGetFractionalTicks();
     double frameDelay = frameTime - lastFrameTime;
     cumulativeFrameDelay += frameDelay;
 

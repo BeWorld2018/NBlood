@@ -34,7 +34,7 @@ int32_t g_numEnvSoundsPlaying, g_highestSoundIdx;
 static char *MusicPtr;
 
 int32_t MusicIsWaveform;
-static int32_t MusicVoice = -1;
+int32_t MusicVoice = -1;
 
 static bool MusicPaused;
 static bool SoundPaused;
@@ -530,7 +530,7 @@ int32_t S_DefineSound(int sndidx, const char* name, int minpitch, int maxpitch, 
 
     snd.ps = clamp(minpitch, INT16_MIN, INT16_MAX);
     snd.pe = clamp(maxpitch, INT16_MIN, INT16_MAX);
-    snd.pr = priority & 255;
+    snd.pr = priority & 0xFF;
     snd.m = type & ~SF_ONEINST_INTERNAL;
     snd.vo = clamp(distance, INT16_MIN, INT16_MAX);
     snd.volume = volume * fix16_one;

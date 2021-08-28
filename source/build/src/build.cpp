@@ -171,7 +171,7 @@ static int32_t currentlist=0;
 
 static int32_t fillist[640];
 // used for fillsector, batch point insertion, backup_highlighted_map
-static int32_t tempxyar[MAXWALLS][2];
+static vec2_t tempxyar[MAXWALLS];
 
 static int32_t mousx, mousy;
 int16_t prefixtiles[10] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
@@ -1439,7 +1439,7 @@ void editinput(void)
 
     {
         int16_t ocursectnum = cursectnum;
-        updatesectorz(pos.x,pos.y,pos.z, &cursectnum);
+        (!m32_clipping ? updatesectorz_compat : updatesectorz)(pos.x,pos.y,pos.z, &cursectnum);
         if (cursectnum<0)
         {
             if (zmode != 2)
@@ -2247,7 +2247,7 @@ static void duplicate_selected_sprites(void)
                 j = insertsprite(sprite[k].sectnum,sprite[k].statnum);
                 Bmemcpy(&sprite[j],&sprite[k],sizeof(spritetype));
 //                sprite[j].sectnum = sprite[k].sectnum;   //Don't let memcpy overwrite sector!
-//                setsprite(j,(vec3_t *)&sprite[j]);
+//                setsprite(j,&sprite[j].pos);
             }
 
         printmessage16("Sprites duplicated.");
@@ -2390,6 +2390,7 @@ static int32_t insert_sprite_common(int32_t sectnum, int32_t dax, int32_t day)
     sprite[i].lotag = 0;
     sprite[i].hitag = 0;
     sprite[i].extra = -1;
+    sprite[i].blend = 0;
 
     Bmemset(localartfreq, 0, sizeof(localartfreq));
     for (k=0; k<MAXSPRITES; k++)
@@ -4066,12 +4067,6 @@ void overheadeditor(void)
             {
 #ifdef USE_OPENGL
                 int bakrendmode = rendmode;
-#endif
-                vec2_t bdim = { xdim, ydim };
-
-                xdim = xdim2d;
-                ydim = ydim2d;
-#ifdef USE_OPENGL
                 rendmode = REND_CLASSIC;
 #endif
 
@@ -4095,7 +4090,13 @@ void overheadeditor(void)
                     inpclamp(&pos.z, cz+(4<<8), fz-(4<<8));
 
                     videoEndDrawing();
-                    videoSetViewableArea(m32_2d3d.x, m32_2d3d.y, m32_2d3d.x + XSIZE_2D3D, m32_2d3d.y + YSIZE_2D3D);
+
+                    vec2_t b = { xdim, ydim };
+                    oxyaspect = -1;
+                    videoSetViewableArea(m32_2d3d.x, m32_2d3d.y, m32_2d3d.x + XSIZE_2D3D - 1, m32_2d3d.y + YSIZE_2D3D - 1);
+                    xdim = XSIZE_2D3D;
+                    ydim = YSIZE_2D3D;
+                    //calc_ylookup(xdim, ydim);
                     videoClearViewableArea(-1);
 
                     vec2_t osearch = { searchx, searchy };
@@ -4104,15 +4105,18 @@ void overheadeditor(void)
                     searchy -= m32_2d3d.y;
 
                     M32_DrawRoomsAndMasks();
-                    videoSetViewableArea(0, 0, xdim2d-1, ydim2d-1);
 
 #ifdef USE_OPENGL
                     rendmode = bakrendmode;
 #endif
-                    xdim = bdim.x;
-                    ydim = bdim.y;
                     searchx = osearch.x;
                     searchy = osearch.y;
+
+                    oxyaspect = -1;
+                    xdim = b.x;
+                    ydim = b.y;
+                    videoSetViewableArea(0, 0, xdim-1, ydim-1);
+                    //calc_ylookup(xdim, ydim);
 
                     videoBeginDrawing();
                     editorDraw2dLine(m32_2d3d.x, m32_2d3d.y, m32_2d3d.x + XSIZE_2D3D, m32_2d3d.y, editorcolors[15]);
@@ -7742,7 +7746,7 @@ end_space_handling:
                 if (newnumwalls > numwalls)  // batch insert points
                 {
                     const int32_t numdrawnwalls = newnumwalls-numwalls;
-                    vec2_t *point = (vec2_t *)tempxyar;  // [MAXWALLS][2]
+                    vec2_t * point = tempxyar;
                     int32_t insdpoints = 0;
 
                     // back up the points of the line strip
@@ -10209,8 +10213,8 @@ int32_t fillsector_maybetrans(int16_t sectnum, int32_t fillcolor, uint8_t dotran
 
         if (m32_sideview)
         {
-            tempxyar[z][0] = x1;
-            tempxyar[z][1] = y1;
+            tempxyar[z].x = x1;
+            tempxyar[z].y = y1;
         }
 
         miny = min(miny, y1);
@@ -10234,10 +10238,10 @@ int32_t fillsector_maybetrans(int16_t sectnum, int32_t fillcolor, uint8_t dotran
         {
             if (m32_sideview)
             {
-                x1 = tempxyar[z][0];
-                y1 = tempxyar[z][1];
-                x2 = tempxyar[wall[z].point2][0];
-                y2 = tempxyar[wall[z].point2][1];
+                x1 = tempxyar[z].x;
+                y1 = tempxyar[z].y;
+                x2 = tempxyar[wall[z].point2].x;
+                y2 = tempxyar[wall[z].point2].y;
 
                 if (y1 > y2)
                 {

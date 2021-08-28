@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "duke3d.h"
 #include "premap.h"
 #include "prlights.h"
+#include "md4.h"
 #include "savegame.h"
 
 #include "vfs.h"
@@ -346,6 +347,54 @@ corrupt:
     return 1;
 }
 
+static int32_t sv_loadBoardMD4(char* const fn)
+{
+    buildvfs_kfd fil;
+    if ((fil = kopen4load(fn,0)) == buildvfs_kfd_invalid)
+        return -1;
+
+    klseek(fil, 0, SEEK_SET);
+    int32_t boardsize = kfilelength(fil);
+    uint8_t *fullboard = (uint8_t*)Xmalloc(boardsize);
+    if (kread_and_test(fil, fullboard, boardsize))
+    {
+        Xfree(fullboard);
+        kclose(fil);
+        return -1;
+    }
+
+    md4once(fullboard, boardsize, g_loadedMapHack.md4);
+    Xfree(fullboard);
+    kclose(fil);
+    return 0;
+}
+
+static void sv_loadMhk(usermaphack_t* const mhkInfo, char* const currentboardfilename)
+{
+    bool loadedMhk = false;
+
+    if (mhkInfo && (loadedMhk = (engineLoadMHK(mhkInfo->mhkfile) == 0)))
+        initprintf("Loaded map hack file \"%s\"\n", mhkInfo->mhkfile);
+
+    if (!loadedMhk)
+    {
+        char bfn[BMAX_PATH];
+        Bstrcpy(bfn, currentboardfilename);
+        append_ext_UNSAFE(bfn, ".mhk");
+        if (engineLoadMHK(bfn) == 0)
+            initprintf("Loaded map hack file \"%s\"\n", bfn);
+    }
+}
+
+static void sv_loadMapart(usermaphack_t* const mhkInfo, char* const currentboardfilename)
+{
+    if (mhkInfo && mhkInfo->mapart)
+    {
+        initprintf("Using mapinfo-defined mapart \"%s\"\n", mhkInfo->mapart);
+        artSetupMapArt(mhkInfo->mapart);
+    }
+    else artSetupMapArt(currentboardfilename);
+}
 
 static void sv_postudload();
 
@@ -465,14 +514,19 @@ int32_t G_LoadPlayer(savebrief_t & sv)
 
             if (currentboardfilename[0])
             {
+                usermaphack_t* mhkInfo = NULL;
+                if (sv_loadBoardMD4(currentboardfilename) == 0)
+                    mhkInfo = (usermaphack_t *)bsearch(&g_loadedMapHack, usermaphacks, num_usermaphacks,
+                                 sizeof(usermaphack_t), compare_usermaphacks);
+
                 // only setup art if map differs from previous
                 if (!previousboardfilename[0] || Bstrcmp(previousboardfilename, currentboardfilename))
                 {
-                    artSetupMapArt(currentboardfilename);
+                    sv_loadMapart(mhkInfo, currentboardfilename);
                     Bstrcpy(previousboardfilename, currentboardfilename);
                 }
-                append_ext_UNSAFE(currentboardfilename, ".mhk");
-                engineLoadMHK(currentboardfilename);
+
+                sv_loadMhk(mhkInfo, currentboardfilename);
             }
 
             currentboardfilename[0] = '\0';
@@ -665,14 +719,19 @@ int32_t G_LoadPlayer(savebrief_t & sv)
 
     if (currentboardfilename[0])
     {
+        usermaphack_t* mhkInfo = NULL;
+        if (sv_loadBoardMD4(currentboardfilename) == 0)
+            mhkInfo = (usermaphack_t *)bsearch(&g_loadedMapHack, usermaphacks, num_usermaphacks,
+                                 sizeof(usermaphack_t), compare_usermaphacks);
+
         // only setup art if map differs from previous
         if (!previousboardfilename[0] || Bstrcmp(previousboardfilename, currentboardfilename))
         {
-            artSetupMapArt(currentboardfilename);
+            sv_loadMapart(mhkInfo, currentboardfilename);
             Bstrcpy(previousboardfilename, currentboardfilename);
         }
-        append_ext_UNSAFE(currentboardfilename, ".mhk");
-        engineLoadMHK(currentboardfilename);
+
+        sv_loadMhk(mhkInfo, currentboardfilename);
     }
 
     Bmemcpy(currentboardfilename, boardfilename, BMAX_PATH);
@@ -2028,7 +2087,7 @@ static inline int sv_checkoffset(int const scriptoffs, int const val, int const 
 }
 
 // translate anything in actor[] that holds an offset into compiled CON into a label index
-static void sv_preactorsave(void)
+void sv_prepareactors(actor_t * const actor)
 {
     for (int i = 0; i < MAXSPRITES; i++)
     {
@@ -2061,24 +2120,23 @@ static void sv_preactorsave(void)
 }
 
 // translate the script offsets back from label index to offset in the currently compiled script
-static void sv_postactordata(void)
+void sv_restoreactors(actor_t * const actor)
 {
     for (int i = 0; i < MAXSPRITES; i++)
     {
         auto &a = actor[i];
         auto  s = (uspriteptr_t)&sprite[i];
 
-#ifdef POLYMER
-        practor[i].lightptr = NULL;
-        practor[i].lightId = -1;
-#endif
         if (a.flags & SFLAG_RESERVED)
         {
+            Bassert(AC_MOVE_ID(a.t_data) < savegame_labelcnt);
             int const index = hash_find(&h_labels, &savegame_labels[AC_MOVE_ID(a.t_data) << 6]);
             if (index == -1)
             {
                 OSD_Printf("couldn't find savegame label %s\n", &savegame_labels[AC_MOVE_ID(a.t_data) << 6]);
-                AC_MOVE_ID(a.t_data) = *(g_tile[s->picnum].execPtr + 2);
+
+                if (G_TileHasActor(s->picnum))
+                    AC_MOVE_ID(a.t_data) = g_tile[s->picnum].execPtr[2];
             }
             else
                 AC_MOVE_ID(a.t_data) = labelcode[index];
@@ -2086,13 +2144,16 @@ static void sv_postactordata(void)
 
         if (a.flags & SFLAG_RESERVED2)
         {
+            Bassert(AC_ACTION_ID(a.t_data) < savegame_labelcnt);
             char *str = &savegame_labels[AC_ACTION_ID(a.t_data) << 6];
             int const index = hash_find(&h_labels, str);
             if (index == -1)
             {
                 OSD_Printf("couldn't find savegame label %s\n", &savegame_labels[AC_ACTION_ID(a.t_data) << 6]);
-                if (g_tile[s->picnum].execPtr)
-                    AC_ACTION_ID(a.t_data) = *(g_tile[s->picnum].execPtr + 1);
+
+                if (G_TileHasActor(s->picnum))
+                    AC_ACTION_ID(a.t_data) = g_tile[s->picnum].execPtr[2];
+
                 AC_ACTION_COUNT(a.t_data) = 0;
                 AC_CURFRAME(a.t_data)     = 0;
             }
@@ -2102,6 +2163,7 @@ static void sv_postactordata(void)
 
         if (a.flags & SFLAG_RESERVED3)
         {
+            Bassert(AC_AI_ID(a.t_data) < savegame_labelcnt);
             int const index = hash_find(&h_labels, &savegame_labels[AC_AI_ID(a.t_data) << 6]);
             if (index == -1)
             {
@@ -2113,6 +2175,16 @@ static void sv_postactordata(void)
         }
         a.flags &= ~(SFLAG_RESERVED|SFLAG_RESERVED2|SFLAG_RESERVED3);
     }
+}
+
+static void sv_preactorsave(void) { sv_prepareactors(actor); }
+
+static void sv_postactordata(void)
+{
+    sv_restoreactors(actor);
+#ifdef POLYMER
+    G_DeleteAllLights();
+#endif
 }
 
 static void sv_preanimateptrsave()
@@ -2267,7 +2339,10 @@ static int32_t doloadplayer2(buildvfs_kfd fil, uint8_t **memptr)
     int const i = Gv_ReadSave(fil);
 
     if (savegame_labels != label)
+    {
         DO_FREE_AND_NULL(savegame_labels);
+        savegame_labelcnt = 0;
+    }
 
     if (i) return i;
 
@@ -2376,12 +2451,30 @@ static void postloadplayer(int32_t savegamep)
     if (savegamep)
     {
         for (SPRITES_OF(STAT_FX, i))
-            if (sprite[i].picnum == MUSICANDSFX)
+            if (sprite[i].picnum == MUSICANDSFX && T1(i) && SLT(i) < 999 && g_sounds[SLT(i)].m & (SF_MSFX|SF_LOOP))
             {
-                int soundNum = sprite[i].lotag;
-                T2(i) = ud.config.SoundToggle;
-                if (!((g_sounds[soundNum].m & SF_LOOP) || (sprite[i].hitag && sprite[i].hitag != soundNum)))
-                    T1(i) = 0;
+                T2(i) = 0;
+
+                for (int SPRITES_OF_SECT(SECT(i), j))
+                    if (sprite[j].picnum == SECTOREFFECTOR && dukeValidateSectorEffectorPlaysSound(j))
+                    {
+                        T1(i) = 0;
+                        T2(i) = ud.config.SoundToggle;
+
+                        A_CallSound(SECT(i), j);
+                        break;
+                    }
+
+                if (T1(i))
+                {
+                    if (dukeValidateSectorPlaysSound(SECT(i)))
+                    {
+                        T1(i) = 0;
+                        T2(i) = ud.config.SoundToggle;
+
+                        A_CallSound(SECT(i), i);
+                    }
+                }
             }
 
         G_UpdateScreenArea();
